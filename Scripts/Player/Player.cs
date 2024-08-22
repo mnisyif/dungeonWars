@@ -1,131 +1,186 @@
 using Godot;
-using System;
-using System.Numerics;
-using Vector3 = Godot.Vector3;
 
 public partial class Player : CharacterBody3D {
-	[Export] private float gravity = 9.8f;
-	[Export] private int jumpForce = 9;
-	[Export] private int walkSpeed = 3;
-	[Export] private int runSpeed = 10;
+	// [Export] public float Gravity = 9.8f;
+	// [Export] public int JumpForce = 4.5f;
+	// [Export] public int WalkSpeed = 3f;
+	// [Export] public int RunSpeed = 10f;
+	[Export] public float Gravity = 9.8f;
+	[Export] public int JumpForce = 9;
+	[Export] public int WalkSpeed = 3;
+	[Export] public int RunSpeed = 10;
 
-	// animation node names
-	private const string idleNodeName = "Idle";
-	private const string walkNodeName = "Walk";
-	private const string runNodeName = "Run";
-	private const string jumpNodeName = "Jump";
-	private const string attack1NodeName = "Attack01";
-	private const string deathNodeName = "Death";
+	// Animation node names
+	private const string IdleNodeName = "Idle";
+	private const string WalkNodeName = "Walk";
+	private const string RunNodeName = "Run";
+	private const string JumpNodeName = "Jump";
+	private const string Attack1NodeName = "Attack01";
+	private const string DeathNodeName = "Death";
 
-	// state machine conditions
+	// State machine conditions
 	private bool isAttacking;
 	private bool isWalking;
 	private bool isRunning;
-	private bool isDead;
+	private bool isDying;
 
-	// physics values
+	// Physics values
 	private Vector3 direction;
 	private Vector3 horizontalVelocity;
-	private float aimTurn;
-	private Vector3 movement;
 	private Vector3 verticalVelocity;
+	private float aimTurn;
 	private int movementSpeed;
 	private int angularAcceleration;
 	private int acceleration;
 	private bool justHit;
 
+	// OnReady load
 	private Node3D camrotH;
 	private Node3D playerMesh;
+	private AnimationTree animationTree;
+	private AnimationNodeStateMachinePlayback playBack;
 
 	public override void _Ready() {
 		camrotH = GetNode<Node3D>("camroot/h");
 		playerMesh = GetNode<Node3D>("Knight");
+		animationTree = GetNode<AnimationTree>("AnimationTree");
+		playBack = (AnimationNodeStateMachinePlayback)animationTree.Get("parameters/playback");
 	}
 
 	public override void _Input(InputEvent @event) {
 		if (@event is InputEventMouseMotion mouseMotion) {
-			aimTurn = (float)(-mouseMotion.Relative.X * 0.015);
+			aimTurn = -mouseMotion.Relative.X * 0.015f;
 		}
 
 		if (@event.IsActionPressed("aim")) {
 			direction = camrotH.GlobalTransform.Basis.Z;
 		}
 	}
+
 	public override void _PhysicsProcess(double delta) {
-		bool onFloor = IsOnFloor();
+		if (isDying) return;
 
-		if (!isDead) {
-			if (!onFloor) {
-				verticalVelocity += Vector3.Down * gravity * 2 * (float)delta;
+		bool isOnFloor = IsOnFloor();
 
-			} else {
-				verticalVelocity = Vector3.Up * gravity / 10;
-			}
+		Attack01();
+		HandleGravity(delta, isOnFloor);
+		HandleAttack();
+		HandleMovement(delta);
+		UpdateVelocity();
+		MoveAndSlide();
+		SetAnimationParameters(isOnFloor);
+	}
 
-			if (Input.IsActionJustPressed("jump") && !isAttacking && onFloor) {
-				verticalVelocity = Vector3.Up * jumpForce;
-			}
+	private void HandleGravity(double delta, bool isOnFloor) {
+		if (!isOnFloor) {
+			verticalVelocity += Vector3.Down * Gravity * 2 * (float)delta;
 
-			angularAcceleration = 10;
-			movementSpeed = 0;
-			acceleration = 15;
+		} else {
+			verticalVelocity = Vector3.Down * Gravity / 10; // Small downward velocity when on floor
+		}
 
-			float hRot = camrotH.GlobalTransform.Basis.GetEuler().Y;
+		if (Input.IsActionJustPressed("jump") && !isAttacking && isOnFloor) {
+			verticalVelocity = Vector3.Up * JumpForce;
+			// GD.Print("Jump initiated!"); // debugging
+		}
+	}
 
-			if (Input.IsActionPressed("forward") || Input.IsActionPressed("backward") || Input.IsActionPressed("left") || Input.IsActionPressed("right")) {
-				direction = new Vector3(
-					Input.GetActionStrength("left") - Input.GetActionStrength("right"),
-					0,
-					Input.GetActionStrength("forward") - Input.GetActionStrength("backward")
-				);
-				direction = direction.Rotated(Vector3.Up, hRot).Normalized();
-				if (Input.IsActionPressed("spring") && isWalking) {
-					movementSpeed = runSpeed;
-					isRunning = true;
+	private void HandleAttack() {
+		string currentNodeStatus = playBack.GetCurrentNode();
+		if (currentNodeStatus.Contains(Attack1NodeName)) {
+			isAttacking = true;
+		} else {
+			isAttacking = false;
+		}
+	}
 
-				} else {
-					isWalking = true;
-					movementSpeed = walkSpeed;
-				}
+	private void HandleMovement(double delta) {
+		float hRot = camrotH.GlobalTransform.Basis.GetEuler().Y;
 
-			} else {
-				isWalking = false;
-				isRunning = false;
-			}
+		movementSpeed = 0;
+		acceleration = 15;
 
-			// update player rotatoin using vector3
-			if (Input.IsActionPressed("aim")) {
-				Vector3 targetRot = new Vector3(
-					playerMesh.Rotation.X,
-					camrotH.Rotation.Y,
-					playerMesh.Rotation.Z
-				);
-				playerMesh.Rotation = playerMesh.Rotation.Lerp(targetRot, (float)delta * angularAcceleration);
+		if (Input.IsActionPressed("forward") || Input.IsActionPressed("backward") ||
+			Input.IsActionPressed("left") || Input.IsActionPressed("right")) {
 
-			} else {
-				float targetYRot = Mathf.Atan2(-direction.X, -direction.Z);
-				Vector3 targetRot = new Godot.Vector3(
-					playerMesh.Rotation.X,
-					targetYRot,
-					playerMesh.Rotation.Z
-				);
-				playerMesh.Rotation = playerMesh.Rotation.Lerp(targetRot, (float)delta * angularAcceleration);
-			}
-
-			if (isAttacking) {
-				horizontalVelocity = horizontalVelocity.Lerp(direction * 0.1f, (float)delta * acceleration);
-
-			} else {
-				horizontalVelocity = horizontalVelocity.Lerp(direction * movementSpeed, (float)delta * acceleration);
-			}
-
-			Velocity = new Vector3(
-				horizontalVelocity.X + verticalVelocity.X,
-				verticalVelocity.Y,
-				horizontalVelocity.Z + verticalVelocity.Z
+			direction = new Vector3(
+				Input.GetActionStrength("left") - Input.GetActionStrength("right"),
+				0,
+				Input.GetActionStrength("forward") - Input.GetActionStrength("backward")
 			);
+			direction = direction.Rotated(Vector3.Up, hRot).Normalized();
 
-			MoveAndSlide();
+			if (Input.IsActionPressed("sprint") && isWalking) {
+				movementSpeed = RunSpeed;
+				isRunning = true;
+			} else {
+				isWalking = true;
+				movementSpeed = WalkSpeed;
+			}
+		} else {
+			isWalking = false;
+			isRunning = false;
+		}
+
+		UpdatePlayerRotation(delta);
+	}
+
+	private void UpdatePlayerRotation(double delta) {
+		angularAcceleration = 10;
+
+		if (Input.IsActionPressed("aim")) {
+			Vector3 targetRot = new(
+				playerMesh.Rotation.X,
+				camrotH.Rotation.Y,
+				playerMesh.Rotation.Z
+			);
+			playerMesh.Rotation = playerMesh.Rotation.Lerp(targetRot, (float)delta * angularAcceleration);
+
+		} else {
+			float targetYRot = Mathf.Atan2(-direction.X, -direction.Z);
+			Vector3 targetRot = new(
+				playerMesh.Rotation.X,
+				targetYRot,
+				playerMesh.Rotation.Z
+			);
+			playerMesh.Rotation = playerMesh.Rotation.Lerp(targetRot, (float)delta * angularAcceleration);
+		}
+
+		if (isAttacking) {
+			horizontalVelocity = horizontalVelocity.Lerp(direction.Normalized() * 0.1f, (float)delta * acceleration);
+
+		} else {
+			horizontalVelocity = horizontalVelocity.Lerp(direction.Normalized() * movementSpeed, (float)delta * acceleration);
+		}
+	}
+
+	private void UpdateVelocity() {
+		Velocity = new(
+			horizontalVelocity.X + verticalVelocity.X,
+			verticalVelocity.Y,
+			horizontalVelocity.Z + verticalVelocity.Z
+		);
+	}
+
+	private void SetAnimationParameters(bool isOnFloor) {
+		animationTree.Set("parameters/conditions/IsOnFloor", isOnFloor);
+		animationTree.Set("parameters/conditions/IsInAir", !isOnFloor);
+		animationTree.Set("parameters/conditions/IsWalking", isWalking);
+		animationTree.Set("parameters/conditions/IsNotWalking", !isWalking);
+		animationTree.Set("parameters/conditions/IsRunning", isRunning);
+		animationTree.Set("parameters/conditions/IsNotRunning", !isRunning);
+		animationTree.Set("parameters/conditions/IsDying", isDying);
+	}
+
+	private void Attack01() {
+		string currentNodeStatus = playBack.GetCurrentNode();
+
+		if (currentNodeStatus.Contains(IdleNodeName) || currentNodeStatus.Contains(WalkNodeName) || currentNodeStatus.Contains(RunNodeName)) {
+			if (Input.IsActionJustPressed("attack")) {
+				if (!isAttacking) {
+					playBack.Travel(Attack1NodeName);
+				}
+			}
 		}
 	}
 }
