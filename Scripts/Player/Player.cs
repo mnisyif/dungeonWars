@@ -1,10 +1,6 @@
 using Godot;
 
 public partial class Player : CharacterBody3D {
-	// [Export] public float Gravity = 9.8f;
-	// [Export] public int JumpForce = 4.5f;
-	// [Export] public int WalkSpeed = 3f;
-	// [Export] public int RunSpeed = 10f;
 	[Export] public float Gravity = 9.8f;
 	[Export] public int JumpForce = 9;
 	[Export] public int WalkSpeed = 3;
@@ -120,30 +116,7 @@ public partial class Player : CharacterBody3D {
 		} else {
 			isWalking = false;
 			isRunning = false;
-		}
-
-		UpdatePlayerRotation(delta);
-	}
-
-	private void UpdatePlayerRotation(double delta) {
-		angularAcceleration = 10;
-
-		if (Input.IsActionPressed("aim")) {
-			Vector3 targetRot = new(
-				playerMesh.Rotation.X,
-				camrotH.Rotation.Y,
-				playerMesh.Rotation.Z
-			);
-			playerMesh.Rotation = playerMesh.Rotation.Lerp(targetRot, (float)delta * angularAcceleration);
-
-		} else {
-			float targetYRot = Mathf.Atan2(-direction.X, -direction.Z);
-			Vector3 targetRot = new(
-				playerMesh.Rotation.X,
-				targetYRot,
-				playerMesh.Rotation.Z
-			);
-			playerMesh.Rotation = playerMesh.Rotation.Lerp(targetRot, (float)delta * angularAcceleration);
+			direction = Vector3.Zero;
 		}
 
 		if (isAttacking) {
@@ -152,6 +125,30 @@ public partial class Player : CharacterBody3D {
 		} else {
 			horizontalVelocity = horizontalVelocity.Lerp(direction.Normalized() * movementSpeed, (float)delta * acceleration);
 		}
+
+		UpdatePlayerRotation(delta);
+	}
+
+	private void UpdatePlayerRotation(double delta) {
+		angularAcceleration = 10;
+
+		// if (direction != Vector3.Zero) {
+		float targetRotY;
+
+		if (Input.IsActionPressed("aim")) {
+			targetRotY = camrotH.Rotation.Y;
+		} else {
+			targetRotY = Mathf.Atan2(direction.X, direction.Z);
+		}
+
+		Vector3 targetRot = new(
+			playerMesh.Rotation.X,
+			targetRotY,
+			playerMesh.Rotation.Z
+		);
+
+		playerMesh.Rotation = playerMesh.Rotation.Lerp(targetRot, (float)delta * angularAcceleration);
+		// }
 	}
 
 	private void UpdateVelocity() {
