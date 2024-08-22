@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://djtsq0toi0to0"]
+[gd_scene load_steps=5 format=3 uid="uid://djtsq0toi0to0"]
 
 [ext_resource type="MeshLibrary" uid="uid://cugmbcg4us01f" path="res://Scenes/Levels/MeshLibrary.tres" id="1_do2b8"]
 [ext_resource type="PackedScene" uid="uid://b3igl604y1xgq" path="res://Scenes/Player/Player.tscn" id="2_pcv2a"]
+[ext_resource type="PackedScene" uid="uid://bwxpxslib2yyw" path="res://Scenes/Monster/Skeleton.tscn" id="3_5optt"]
 
 [sub_resource type="Environment" id="Environment_xv0tj"]
 background_mode = 1
@@ -25,3 +26,6 @@ environment = SubResource("Environment_xv0tj")
 
 [node name="Player" parent="." instance=ExtResource("2_pcv2a")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+
+[node name="Skeleton" parent="." instance=ExtResource("3_5optt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.39077, 1.04056, 8.08513)
